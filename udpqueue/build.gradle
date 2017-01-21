@@ -1,0 +1,37 @@
+plugins {
+  id 'java'
+  id 'application'
+  id 'org.sonarqube' version '2.1'
+  id 'com.jfrog.bintray' version '1.7.3'
+}
+
+ext.moduleName = 'udpqueue'
+version = '1.0.4'
+
+dependencies {
+  compile 'com.sedmelluq:lavaplayer-common:1.0.1'
+  compile "org.slf4j:slf4j-api:$slf4jVersion"
+}
+
+compileJava.dependsOn(':udpqueue-natives:checkNatives')
+
+task sourceJar(type: Jar) {
+  from sourceSets.main.allJava
+}
+
+publishing {
+  publications {
+    mavenJava(MavenPublication) {
+      groupId 'com.sedmelluq'
+      artifactId 'lavaplayer-udp-scheduler'
+
+      from components.java
+
+      artifact sourceJar {
+        classifier "sources"
+      }
+    }
+  }
+}
+
+apply from: "${rootDir}/gradle/bintray.gradle"
