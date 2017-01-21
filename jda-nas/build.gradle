@@ -9,7 +9,7 @@ ext.moduleName = 'jda-nas'
 version = '1.0.3'
 
 dependencies {
-  compile project(':udpqueue')
+  compile project(':udp-queue')
 
   compile "org.slf4j:slf4j-api:$slf4jVersion"
 

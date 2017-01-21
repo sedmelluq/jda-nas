@@ -1,1 +1,1 @@
-include 'udpqueue', 'udpqueue-natives', 'jda-nas'
+include 'udp-queue', 'udp-queue-natives', 'jda-nas'

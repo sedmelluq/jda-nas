@@ -5,7 +5,7 @@ plugins {
   id 'com.jfrog.bintray' version '1.7.3'
 }
 
-ext.moduleName = 'udpqueue'
+ext.moduleName = 'udp-queue'
 version = '1.0.4'
 
 dependencies {
@@ -13,7 +13,7 @@ dependencies {
   compile "org.slf4j:slf4j-api:$slf4jVersion"
 }
 
-compileJava.dependsOn(':udpqueue-natives:checkNatives')
+compileJava.dependsOn(':udp-queue-natives:checkNatives')
 
 task sourceJar(type: Jar) {
   from sourceSets.main.allJava
@@ -23,7 +23,7 @@ publishing {
   publications {
     mavenJava(MavenPublication) {
       groupId 'com.sedmelluq'
-      artifactId 'lavaplayer-udp-scheduler'
+      artifactId moduleName
 
       from components.java
 
