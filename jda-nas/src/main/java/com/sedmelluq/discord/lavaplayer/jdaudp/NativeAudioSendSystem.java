@@ -34,10 +34,8 @@ public class NativeAudioSendSystem implements IAudioSendSystem {
     for (int i = 0; i < remaining; i++) {
       DatagramPacket packet = packetProvider.getNextPacket(emptyQueue);
 
-      if (packet == null) {
+      if (packet == null || !queueManager.queuePacket(queueKey, packet)) {
         break;
-      } else {
-        queueManager.queuePacket(queueKey, packet);
       }
     }
   }

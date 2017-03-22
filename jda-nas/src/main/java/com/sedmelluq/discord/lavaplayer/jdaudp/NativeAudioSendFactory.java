@@ -68,13 +68,17 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
     }
   }
 
-  private void populateQueues() {
-    for (NativeAudioSendSystem system : systems) {
-      synchronized (lock) {
-        if (queueManager == null) {
-          break;
-        }
+  private UdpQueueManager getActiveManager() {
+    synchronized (lock) {
+      return queueManager;
+    }
+  }
 
+  private void populateQueues() {
+    UdpQueueManager manager = getActiveManager();
+
+    if (manager != null) {
+      for (NativeAudioSendSystem system : systems) {
         system.populateQueue(queueManager);
       }
     }

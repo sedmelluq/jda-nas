@@ -6,14 +6,14 @@ plugins {
 }
 
 ext.moduleName = 'jda-nas'
-version = '1.0.3'
+version = '1.0.4'
 
 dependencies {
   compile project(':udp-queue')
 
   compile "org.slf4j:slf4j-api:$slf4jVersion"
 
-  compile 'net.dv8tion:JDA:3.0.BETA2_121'
+  compile 'net.dv8tion:JDA:3.0.0_160'
 }
 
 task sourceJar(type: Jar) {

@@ -14,6 +14,7 @@ public class UdpQueueManager extends NativeResourceHolder {
   private final ByteBuffer packetBuffer;
   private final UdpQueueManagerLibrary library;
   private final long instance;
+  private boolean released;
 
   /**
    * @param bufferCapacity Maximum number of packets in one queue
@@ -34,9 +35,13 @@ public class UdpQueueManager extends NativeResourceHolder {
    * @return Number of empty packet slots in the specified queue
    */
   public int getRemainingCapacity(long key) {
-    checkNotReleased();
+    synchronized (library) {
+      if (released) {
+        return 0;
+      }
 
-    return library.getRemainingCapacity(instance, key);
+      return library.getRemainingCapacity(instance, key);
+    }
   }
 
   /**
@@ -55,11 +60,17 @@ public class UdpQueueManager extends NativeResourceHolder {
    * @param packet Packet to add to the queue
    * @return True if adding the packet to the queue succeeded
    */
-  public synchronized boolean queuePacket(long key, DatagramPacket packet) {
-    packetBuffer.clear();
-    packetBuffer.put(packet.getData(), packet.getOffset(), packet.getLength());
+  public boolean queuePacket(long key, DatagramPacket packet) {
+    synchronized (library) {
+      if (released) {
+        return false;
+      }
 
-    return library.queuePacket(instance, key, packet.getAddress().getHostAddress(), packet.getPort(), packetBuffer, packet.getLength());
+      packetBuffer.clear();
+      packetBuffer.put(packet.getData(), packet.getOffset(), packet.getLength());
+
+      return library.queuePacket(instance, key, packet.getAddress().getHostAddress(), packet.getPort(), packetBuffer, packet.getLength());
+    }
   }
 
   /**
@@ -72,7 +83,10 @@ public class UdpQueueManager extends NativeResourceHolder {
 
   @Override
   protected void freeResources() {
-    library.destroy(instance);
+    synchronized (library) {
+      released = true;
+      library.destroy(instance);
+    }
   }
 
   /**
