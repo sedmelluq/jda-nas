@@ -22,8 +22,8 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
   private final AtomicLong identifierCounter = new AtomicLong();
   private final KeySetView<NativeAudioSendSystem, Boolean> systems = ConcurrentHashMap.newKeySet();
   private final Object lock = new Object();
+  private volatile UdpQueueManager queueManager;
   private ScheduledExecutorService scheduler;
-  private UdpQueueManager queueManager;
 
   private void initialiseQueueManager() {
     scheduler = new ScheduledThreadPoolExecutor(1, new DaemonThreadFactory("native-udp"));
@@ -68,14 +68,8 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
     }
   }
 
-  private UdpQueueManager getActiveManager() {
-    synchronized (lock) {
-      return queueManager;
-    }
-  }
-
   private void populateQueues() {
-    UdpQueueManager manager = getActiveManager();
+    UdpQueueManager manager = queueManager;
 
     if (manager != null) {
       for (NativeAudioSendSystem system : systems) {
