@@ -41,7 +41,7 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
 
     scheduler.scheduleWithFixedDelay(this::populateQueues, 0, 40, TimeUnit.MILLISECONDS);
 
-    Thread thread = new Thread(queueManager::process);
+    Thread thread = new Thread(process(queueManager));
     thread.setPriority((Thread.NORM_PRIORITY + Thread.MAX_PRIORITY) / 2);
     thread.setDaemon(true);
     thread.start();
@@ -85,5 +85,9 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
         system.populateQueue(manager);
       }
     }
+  }
+
+  private static Runnable process(UdpQueueManager unbake) {
+	  return unbake::process;
   }
 }
