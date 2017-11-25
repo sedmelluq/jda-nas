@@ -47,11 +47,13 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
     thread.start();
   }
 
-  private void shutdownQueueManager() {
+  private ScheduledExecutorService shutdownQueueManager() {
     queueManager.close();
     queueManager = null;
 
-    ExecutorTools.shutdownExecutor(scheduler, "native udp queue populator");
+    ScheduledExecutorService currentScheduler = scheduler;
+    scheduler = null;
+    return currentScheduler;
   }
 
   @Override
@@ -70,10 +72,16 @@ public class NativeAudioSendFactory implements IAudioSendFactory {
   }
 
   void removeInstance(NativeAudioSendSystem system) {
+    ScheduledExecutorService schedulerToShutDown = null;
+
     synchronized (lock) {
       if (systems.remove(system) && systems.isEmpty() && queueManager != null) {
-        shutdownQueueManager();
+        schedulerToShutDown = shutdownQueueManager();
       }
+    }
+
+    if (schedulerToShutDown != null) {
+      ExecutorTools.shutdownExecutor(schedulerToShutDown, "native udp queue populator");
     }
   }
 
