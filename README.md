@@ -4,8 +4,10 @@ JDA-NAS is an alternative to JDA's built-in audio packet sending system. It keep
 
 #### Maven package
 
+Replace `x.y.z` with the latest version number: [![Bintray](https://api.bintray.com/packages/sedmelluq/com.sedmelluq/jda-nas/images/download.svg)](https://bintray.com/sedmelluq/com.sedmelluq/jda-nas)
+
 * Repository: jcenter
-* Artifact: **com.sedmelluq:jda-nas:1.0.5**
+* Artifact: **com.sedmelluq:jda-nas:x.y.z**
 
 Using in Gradle:
 ```groovy
@@ -14,7 +16,7 @@ repositories {
 }
 
 dependencies {
-  compile 'com.sedmelluq:jda-nas:1.0.5'
+  compile 'com.sedmelluq:jda-nas:x.y.z'
 }
 ```
 
@@ -32,7 +34,7 @@ Using in Maven:
   <dependency>
     <groupId>com.sedmelluq</groupId>
     <artifactId>jda-nas</artifactId>
-    <version>1.0.5</version>
+    <version>x.y.z</version>
   </dependency>
 </dependencies>
 ```
