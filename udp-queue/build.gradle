@@ -1,7 +1,7 @@
 plugins {
   id 'java'
   id 'org.sonarqube' version '2.6.2'
-  id 'com.jfrog.bintray' version '1.7.3'
+  id 'com.jfrog.bintray' version '1.8.4'
 }
 
 ext.moduleName = 'udp-queue'
