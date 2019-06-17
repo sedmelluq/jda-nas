@@ -3,7 +3,7 @@ package com.sedmelluq.discord.lavaplayer.udpqueue.natives;
 import com.sedmelluq.discord.lavaplayer.natives.NativeLibLoader;
 import com.sedmelluq.discord.lavaplayer.natives.NativeResourceHolder;
 
-import java.net.DatagramPacket;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 /**
@@ -60,16 +60,19 @@ public class UdpQueueManager extends NativeResourceHolder {
    * @param packet Packet to add to the queue
    * @return True if adding the packet to the queue succeeded
    */
-  public boolean queuePacket(long key, DatagramPacket packet) {
+  public boolean queuePacket(long key, ByteBuffer packet, InetSocketAddress address) {
     synchronized (library) {
       if (released) {
         return false;
       }
 
+      int length = packet.remaining();
       packetBuffer.clear();
-      packetBuffer.put(packet.getData(), packet.getOffset(), packet.getLength());
+      packetBuffer.put(packet);
 
-      return library.queuePacket(instance, key, packet.getAddress().getHostAddress(), packet.getPort(), packetBuffer, packet.getLength());
+      int port = address.getPort();
+      String hostAddress = address.getAddress().getHostAddress();
+      return library.queuePacket(instance, key, hostAddress, port, packetBuffer, length);
     }
   }
 
