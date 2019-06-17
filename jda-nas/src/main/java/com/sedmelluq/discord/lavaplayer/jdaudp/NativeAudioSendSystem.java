@@ -1,10 +1,11 @@
 package com.sedmelluq.discord.lavaplayer.jdaudp;
 
 import com.sedmelluq.discord.lavaplayer.udpqueue.natives.UdpQueueManager;
-import net.dv8tion.jda.core.audio.factory.IAudioSendSystem;
-import net.dv8tion.jda.core.audio.factory.IPacketProvider;
+import net.dv8tion.jda.api.audio.factory.IAudioSendSystem;
+import net.dv8tion.jda.api.audio.factory.IPacketProvider;
 
-import java.net.DatagramPacket;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 
 public class NativeAudioSendSystem implements IAudioSendSystem {
   private final long queueKey;
@@ -32,9 +33,10 @@ public class NativeAudioSendSystem implements IAudioSendSystem {
     boolean emptyQueue = queueManager.getCapacity() - remaining > 0;
 
     for (int i = 0; i < remaining; i++) {
-      DatagramPacket packet = packetProvider.getNextPacket(emptyQueue);
+      ByteBuffer packet = packetProvider.getNextPacketRaw(emptyQueue);
+      InetSocketAddress address = packetProvider.getSocketAddress();
 
-      if (packet == null || !queueManager.queuePacket(queueKey, packet)) {
+      if (packet == null || !queueManager.queuePacket(queueKey, packet, address)) {
         break;
       }
     }
