@@ -21,3 +21,6 @@ jebml/src
 udpqueue-natives/dist
 
 *.log
+
+cmake-build-*/
+out/

@@ -1,28 +1,38 @@
 package com.sedmelluq.discord.lavaplayer.udpqueue.natives;
 
-import com.sedmelluq.discord.lavaplayer.natives.NativeLibLoader;
-
+import com.sedmelluq.lava.common.natives.NativeLibraryLoader;
 import java.nio.ByteBuffer;
 
-class UdpQueueManagerLibrary {
+public class UdpQueueManagerLibrary {
+  private static final NativeLibraryLoader nativeLoader =
+      NativeLibraryLoader.create(UdpQueueManagerLibrary.class, "udpqueue");
+
   private UdpQueueManagerLibrary() {
 
   }
 
-  static UdpQueueManagerLibrary getInstance() {
-    NativeLibLoader.load(UdpQueueManagerLibrary.class, "udpqueue");
+  public static UdpQueueManagerLibrary getInstance() {
+    nativeLoader.load();
     return new UdpQueueManagerLibrary();
   }
 
-  native long create(int bufferCapacity, long packetInterval);
+  public native long create(int bufferCapacity, long packetInterval);
 
-  native void destroy(long instance);
+  public native void destroy(long instance);
 
-  native int getRemainingCapacity(long instance, long key);
+  public native int getRemainingCapacity(long instance, long key);
 
-  native boolean queuePacket(long instance, long key, String address, int port, ByteBuffer dataDirectBuffer, int dataLength);
+  public native boolean queuePacket(long instance, long key, String address, int port, ByteBuffer dataDirectBuffer,
+                                    int dataLength);
 
-  native void process(long instance);
+  public native boolean queuePacketWithSocket(long instance, long key, String address, int port,
+                                              ByteBuffer dataDirectBuffer, int dataLength, long explicitSocket);
 
-  static native void pauseDemo(int length);
+  public native boolean deleteQueue(long instance, long key);
+
+  public native void process(long instance);
+
+  public native void processWithSocket(long instance, long ipv4Handle, long ipv6Handle);
+
+  public static native void pauseDemo(int length);
 }

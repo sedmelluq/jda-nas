@@ -14,6 +14,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#define SOCKET_INVALID INVALID_SOCKET
 typedef SOCKET socket_t;
 #else
 #include <sys/types.h>
@@ -22,6 +23,7 @@ typedef SOCKET socket_t;
 #include <netinet/in.h>
 #include <unistd.h>
 
+#define SOCKET_INVALID -1
 typedef int socket_t;
 #define closesocket close
 #endif
@@ -34,6 +36,7 @@ typedef struct queued_packet_s {
 typedef struct unsent_packet_s {
 	queued_packet_t packet;
 	struct addrinfo* address;
+  socket_t explicit_socket;
 } unsent_packet_t;
 
 typedef struct queue_s {
@@ -46,6 +49,7 @@ typedef struct queue_s {
 	size_t buffer_capacity;
 	struct addrinfo* address;
 	linked_node_t link;
+  socket_t explicit_socket;
 } queue_t;
 
 typedef struct queue_manager_s {
@@ -87,6 +91,7 @@ static void queue_pop_packet(queue_t* queue, unsent_packet_t* packet_out) {
 
 	packet_out->packet = *packet;
 	packet_out->address = queue->address;
+	packet_out->explicit_socket = queue->explicit_socket;
 
 	packet->data = NULL;
 	packet->data_length = 0;
@@ -170,7 +175,9 @@ static struct addrinfo* manager_resolve_address(const char* address, int32_t por
 	return result;
 }
 
-static bool manager_queue_packet_locked(queue_manager_t* manager, uint64_t key, const char* address, int32_t port, uint8_t* data, size_t data_length) {
+static bool manager_queue_packet_locked(queue_manager_t* manager, uint64_t key, const char* address, int32_t port,
+    uint8_t* data, size_t data_length, socket_t explicit_socket) {
+
 	bool existed;
 	queue_t* queue = hashmap_put(manager->queues, key, &existed);
 
@@ -185,6 +192,7 @@ static bool manager_queue_packet_locked(queue_manager_t* manager, uint64_t key, 
 		queue->buffer_index = 0;
 		queue->buffer_size = 0;
 		queue->packet_buffer = calloc(queue->buffer_capacity, sizeof(*queue->packet_buffer));
+		queue->explicit_socket = explicit_socket;
 
 		if (queue->address == NULL || queue->packet_buffer == NULL) {
 			queue_entry_free(queue);
@@ -207,7 +215,9 @@ static bool manager_queue_packet_locked(queue_manager_t* manager, uint64_t key, 
 	return true;
 }
 
-static bool manager_queue_packet(queue_manager_t* manager, uint64_t key, const char* address, int32_t port, void* data, size_t data_length) {
+static bool manager_queue_packet(queue_manager_t* manager, uint64_t key, const char* address, int32_t port, void* data,
+    size_t data_length, socket_t explicit_socket) {
+
 	uint8_t* bytes = malloc(data_length);
 	if (bytes == NULL) {
 		return false;
@@ -216,7 +226,7 @@ static bool manager_queue_packet(queue_manager_t* manager, uint64_t key, const c
 	memcpy(bytes, data, data_length);
 
 	mutex_lock(manager->lock);
-	bool result = manager_queue_packet_locked(manager, key, address, port, bytes, data_length);
+	bool result = manager_queue_packet_locked(manager, key, address, port, bytes, data_length, explicit_socket);
 	mutex_unlock(manager->lock);
 
 	if (!result) {
@@ -224,6 +234,28 @@ static bool manager_queue_packet(queue_manager_t* manager, uint64_t key, const c
 	}
 
 	return result;
+}
+
+static bool manager_queue_delete(queue_manager_t* manager, uint64_t key) {
+  bool found = false;
+  mutex_lock(manager->lock);
+
+  queue_t* queue = hashmap_get(manager->queues, key);
+
+  if (queue != NULL && queue->buffer_size > 0) {
+    found = true;
+
+    while (queue->buffer_size > 0) {
+      unsent_packet_t unsent_packet;
+      queue_pop_packet(queue, &unsent_packet);
+
+      free(unsent_packet.packet.data);
+      unsent_packet.packet.data = NULL;
+    }
+  }
+
+  mutex_unlock(manager->lock);
+  return found;
 }
 
 static int64_t manager_get_target_time(queue_manager_t* manager, int64_t current_time) {
@@ -237,6 +269,7 @@ static int64_t manager_process_next_locked(queue_manager_t* manager, unsent_pack
 
 	packet_out->packet.data = NULL;
 	packet_out->address = NULL;
+	packet_out->explicit_socket = SOCKET_INVALID;
 
 	if (queue == NULL) {
 		return current_time + manager->packet_interval;
@@ -272,9 +305,7 @@ static int64_t manager_process_next_locked(queue_manager_t* manager, unsent_pack
 	return manager_get_target_time(manager, current_time);
 }
 
-static void manager_dispatch_packet(queue_manager_t* manager, socket_t socketv4, socket_t socketv6, unsent_packet_t* unsent_packet) {
-	socket_t socketvx = unsent_packet->address->ai_family == AF_INET ? socketv4 : socketv6;
-
+static void manager_dispatch_packet(queue_manager_t* manager, socket_t socketvx, unsent_packet_t* unsent_packet) {
 	sendto(socketvx, (const char*) unsent_packet->packet.data, (int) unsent_packet->packet.data_length, 0, unsent_packet->address->ai_addr, sizeof(*unsent_packet->address->ai_addr));
 
 	free(unsent_packet->packet.data);
@@ -282,39 +313,49 @@ static void manager_dispatch_packet(queue_manager_t* manager, socket_t socketv4,
 	unsent_packet->packet.data_length = 0;
 }
 
+static void manager_process_with_socket(queue_manager_t* manager, socket_t socketv4, socket_t socketv6) {
+  mutex_lock(manager->process_lock);
+
+  while (true) {
+    mutex_lock(manager->lock);
+
+    if (manager->shutting_down) {
+      mutex_unlock(manager->lock);
+      break;
+    }
+
+    int64_t current_time = timing_get_nanos();
+    unsent_packet_t packet_to_send = { 0 };
+
+    int64_t target_time = manager_process_next_locked(manager, &packet_to_send, current_time);
+    mutex_unlock(manager->lock);
+
+    if (packet_to_send.packet.data != NULL) {
+      if (packet_to_send.explicit_socket == SOCKET_INVALID) {
+        socket_t socketvx = packet_to_send.address->ai_family == AF_INET ? socketv4 : socketv6;
+        manager_dispatch_packet(manager, socketvx, &packet_to_send);
+      } else {
+        manager_dispatch_packet(manager, packet_to_send.explicit_socket, &packet_to_send);
+      }
+
+      current_time = timing_get_nanos();
+    }
+
+    int64_t wait_time = target_time - current_time;
+
+    if (wait_time >= 1500000LL) {
+      timing_sleep(wait_time);
+    }
+  }
+
+  mutex_unlock(manager->process_lock);
+}
+
 static void manager_process(queue_manager_t* manager) {
 	socket_t socketv4 = socket(AF_INET, SOCK_DGRAM, 0);
 	socket_t socketv6 = socket(AF_INET6, SOCK_DGRAM, 0);
 
-	mutex_lock(manager->process_lock);
-
-	while (true) {
-		mutex_lock(manager->lock);
-
-		if (manager->shutting_down) {
-			mutex_unlock(manager->lock);
-			break;
-		}
-
-		int64_t current_time = timing_get_nanos();
-		unsent_packet_t packet_to_send = { 0 };
-
-		int64_t target_time = manager_process_next_locked(manager, &packet_to_send, current_time);
-		mutex_unlock(manager->lock);
-
-		if (packet_to_send.packet.data != NULL) {
-			manager_dispatch_packet(manager, socketv4, socketv6, &packet_to_send);
-			current_time = timing_get_nanos();
-		}
-
-		int64_t wait_time = target_time - current_time;
-
-		if (wait_time >= 1500000LL) {
-			timing_sleep(wait_time);
-		}
-	}
-
-	mutex_unlock(manager->process_lock);
+    manager_process_with_socket(manager, socketv4, socketv6);
 
 	closesocket(socketv4);
 	closesocket(socketv6);
@@ -338,15 +379,42 @@ JNIEXPORT jboolean JNICALL Java_com_sedmelluq_discord_lavaplayer_udpqueue_native
 	const char* address = (*jni)->GetStringUTFChars(jni, address_string, NULL);
 	void* bytes = (*jni)->GetDirectBufferAddress(jni, data_buffer);
 
-	bool result = manager_queue_packet((queue_manager_t*) instance, (uint64_t) key, address, port, bytes, (size_t) data_length);
+	bool result = manager_queue_packet((queue_manager_t*) instance, (uint64_t) key, address, port, bytes, (size_t) data_length, SOCKET_INVALID);
 
 	(*jni)->ReleaseStringUTFChars(jni, address_string, address);
 
 	return result ? JNI_TRUE : JNI_FALSE;
 }
 
+JNIEXPORT jboolean JNICALL Java_com_sedmelluq_discord_lavaplayer_udpqueue_natives_UdpQueueManagerLibrary_queuePacketWithSocket(
+    JNIEnv* jni, jobject me, jlong instance, jlong key, jstring address_string, jint port, jobject data_buffer,
+    jint data_length, jlong socket_handle) {
+
+  const char* address = (*jni)->GetStringUTFChars(jni, address_string, NULL);
+  void* bytes = (*jni)->GetDirectBufferAddress(jni, data_buffer);
+
+  bool result = manager_queue_packet((queue_manager_t*) instance, (uint64_t) key, address, port, bytes, (size_t) data_length, (socket_t) socket_handle);
+
+  (*jni)->ReleaseStringUTFChars(jni, address_string, address);
+
+  return result ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT jboolean JNICALL Java_com_sedmelluq_discord_lavaplayer_udpqueue_natives_UdpQueueManagerLibrary_deleteQueue(
+    JNIEnv* jni, jobject me, jlong instance, jlong key) {
+
+	bool result = manager_queue_delete((queue_manager_t*) instance, (uint64_t) key);
+	return result ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL Java_com_sedmelluq_discord_lavaplayer_udpqueue_natives_UdpQueueManagerLibrary_process(JNIEnv* jni, jobject me, jlong instance) {
 	manager_process((queue_manager_t*) instance);
+}
+
+JNIEXPORT void JNICALL Java_com_sedmelluq_discord_lavaplayer_udpqueue_natives_UdpQueueManagerLibrary_processWithSocket(
+    JNIEnv* jni, jobject me, jlong instance, jlong socketv4, jlong socketv6) {
+
+  manager_process_with_socket((queue_manager_t*) instance, (socket_t) socketv4, (socket_t) socketv6);
 }
 
 jint JNICALL waiting_iterate_callback(jlong class_tag, jlong size, jlong* tag_ptr, jint length, void* user_data) {

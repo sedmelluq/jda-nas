@@ -1,8 +1,6 @@
 package com.sedmelluq.discord.lavaplayer.udpqueue.natives;
 
-import com.sedmelluq.discord.lavaplayer.natives.NativeLibLoader;
-import com.sedmelluq.discord.lavaplayer.natives.NativeResourceHolder;
-
+import com.sedmelluq.lava.common.natives.NativeResourceHolder;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
@@ -99,7 +97,7 @@ public class UdpQueueManager extends NativeResourceHolder {
    * @param length Length of the pause in milliseconds
    */
   public static void pauseDemo(int length) {
-    NativeLibLoader.load(UdpQueueManager.class, "udpqueue");
+    UdpQueueManagerLibrary.getInstance();
     UdpQueueManagerLibrary.pauseDemo(length);
   }
 }

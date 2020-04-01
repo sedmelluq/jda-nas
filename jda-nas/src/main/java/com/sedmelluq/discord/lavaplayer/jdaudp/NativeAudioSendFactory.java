@@ -1,8 +1,8 @@
 package com.sedmelluq.discord.lavaplayer.jdaudp;
 
-import com.sedmelluq.discord.lavaplayer.tools.DaemonThreadFactory;
-import com.sedmelluq.discord.lavaplayer.tools.ExecutorTools;
 import com.sedmelluq.discord.lavaplayer.udpqueue.natives.UdpQueueManager;
+import com.sedmelluq.lava.common.tools.DaemonThreadFactory;
+import com.sedmelluq.lava.common.tools.ExecutorTools;
 import net.dv8tion.jda.api.audio.factory.IAudioSendFactory;
 import net.dv8tion.jda.api.audio.factory.IAudioSendSystem;
 import net.dv8tion.jda.api.audio.factory.IPacketProvider;
